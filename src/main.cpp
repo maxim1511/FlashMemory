@@ -15,8 +15,6 @@
 void writeToFlash(SerialFlashFile files[], char filenames[10][10], int16_t batterySOCs[], int16_t batteryVoltages[], int16_t batteryCurrents[]){
 
     
-    int entrySize = 3*sizeof(int16_t);
-    
     // Open files
     for(int i = 0; i < 10; i++){
         if(SerialFlash.create(filenames[i], MAXFILESIZE)){
@@ -27,13 +25,14 @@ void writeToFlash(SerialFlashFile files[], char filenames[10][10], int16_t batte
         }
     }
 
-    // Write the files
-    int16_t buffer[3];
+    // Write to the files
+    String message;
+    char buffer[MAXFILESIZE];
     for(int i = 0; i < 10; i++){
-        buffer[0] = batterySOCs[i];
-        buffer[1] = batteryVoltages[i];
-        buffer[2] = batteryCurrents[i];
-        files[i].write(buffer, entrySize);
+        message = (String)batterySOCs[i] + "," + (String)batteryVoltages[i] + "," + (String)batteryCurrents[i];
+        //files[i].write(buffer, entrySize);
+        message.toCharArray(buffer, MAXFILESIZE);
+        files[i].write(buffer, MAXFILESIZE);
     }
 
     //Close files
@@ -50,6 +49,8 @@ void readFromFlash(char filenames[10][10]){
     SerialFlashFile dummy;
     SerialFlash.opendir();
     int counter = 0;
+
+    // Read all files that are stored in the flash memory
     while(SerialFlash.readdir(filename, sizeof(filename), filesize)){
         dummy = SerialFlash.open(filename);
         dummy.read(buffer, MAXFILESIZE);
@@ -72,31 +73,25 @@ void eraseAllData(){
     Serial.println("Flash erased succesfully!");
 }
 
+// Main function
 void setup(){
+
   Serial.begin(9600);
-  delay(3000);
-  Serial.println(" ");
+  Serial.println();
   //Set up SPI
   //SPI.begin(CLK, MISO, MOSI, CS);
 
-  if (!SerialFlash.begin(CS)) {
+// Start the SPI communication
+ if (!SerialFlash.begin(CS)) {
     while(true) {
       Serial.println("Unable to access SPI Flash chip");
       delay(1000);
     }
+  }else{
+    Serial.println("Successfully connected to SPI Flash chip");
   }
-    /*
-    char filenames[10][9] = {{'f', 'i', 'l', 'e', '0', '.', 'b', 'i', 'n'},
-                             {'f', 'i', 'l', 'e', '1', '.', 'b', 'i', 'n'},
-                             {'f', 'i', 'l', 'e', '2', '.', 'b', 'i', 'n'},
-                             {'f', 'i', 'l', 'e', '3', '.', 'b', 'i', 'n'},
-                             {'f', 'i', 'l', 'e', '4', '.', 'b', 'i', 'n'},
-                             {'f', 'i', 'l', 'e', '5', '.', 'b', 'i', 'n'},
-                             {'f', 'i', 'l', 'e', '6', '.', 'b', 'i', 'n'},
-                             {'f', 'i', 'l', 'e', '7', '.', 'b', 'i', 'n'},
-                             {'f', 'i', 'l', 'e', '8', '.', 'b', 'i', 'n'},
-                             {'f', 'i', 'l', 'e', '9', '.', 'b', 'i', 'n'}};
-                             */
+
+  //Sample Files and values to test the writing and reading
     char filenames[10][10] =   {"file0.bin",
                                 "file1.bin",
                                 "file2.bin", 
@@ -107,7 +102,7 @@ void setup(){
                                 "file7.bin",
                                 "file8.bin",
                                 "file9.bin"};
-    //char filenames[][] = {{'f', 'i', 'l', 'e'}, "file1.bin", "file2.bin", "file3.bin", "file4.bin", "file5.bin", "file6.bin", "file7.bin", "file8.bin", "file9.bin"};
+    
     SerialFlashFile file0;
     SerialFlashFile file1;
     SerialFlashFile file2;
@@ -119,20 +114,14 @@ void setup(){
     SerialFlashFile file8;
     SerialFlashFile file9;
     SerialFlashFile files[] = {file0, file1, file2, file3, file4, file5, file6, file7, file8, file9};
-    int16_t batterySOCs[] =     {12, 55, 0, 64, 71, 23, 49, 99, 100, 86};
+    int16_t batterySOCs[] =     {12,  55,  0,  64,  71,  23,  49,  99, 100, 86};
     int16_t batteryVoltages[] = {101, 110, 99, 105, 105, 102, 105, 99, 100, 103};
-    int16_t batteryCurrents[] = {55, -2, 19, 0, 150, 77, 56, 20, 99, 103};
+    int16_t batteryCurrents[] = {55,  -2,  19, 0,   150, 77,  56,  20, 99,  103};
     
     // Call functions
     writeToFlash(files, filenames, batterySOCs, batteryVoltages, batteryCurrents);
-    delay(5000);
-
-    // Empty the arrays
-    for(int i = 0; i < 10; i++){
-        batterySOCs[i] = 0;
-        batteryVoltages[i] = 0;
-        batteryCurrents[i] = 0;
-    }
+    delay(2000);
+    Serial.println();
     readFromFlash(filenames);
     eraseAllData();
     //readFromFlash(filenames);
@@ -140,5 +129,6 @@ void setup(){
     Serial.end();
 }
 
+// Does nothing
 void loop(){
 }
