@@ -11,7 +11,7 @@ This is how the ESP32 should be connected to the W25Q128FV chip
 | ------------- | ------------- |
 | 3.3V  | VCC |
 |  GPIO4 | CS  |
-| CLK  | 18 |
-|  MISO | 19  |
-|  MOSI | 23  |
+|  GPIO18 | CLK |
+|  GPIO19 | MISO  |
+| GPIO23  | MOSI  |
 
