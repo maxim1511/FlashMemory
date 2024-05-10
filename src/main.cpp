@@ -76,7 +76,7 @@ void eraseAllData(){
 // Main function
 void setup(){
 
-  Serial.begin(9600);
+  Serial.begin(115200);
   Serial.println();
   //Set up SPI
   //SPI.begin(CLK, MISO, MOSI, CS);
