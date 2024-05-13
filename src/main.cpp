@@ -4,28 +4,27 @@
 #include <SPI.h>
 #include <SerialFlash.h>
 
-// Currently using VSPI
+// Currently using VSPI. Only CS is needed here, rest is just for orientation
 #define CS 4
 #define CLK 18
 #define MISO 19
 #define MOSI 23
 
 #define MAXPAGESIZE 256
-#define MAXPAGENUMBER 50
+#define MAXPAGENUMBER 30
 #define MAXNAMELENGTH 14
 
 uint64_t sampleData = 0;
 uint64_t startTime = 0;
 uint16_t directoryIndex = 0;
-bool firstRun = true;
+bool bufferEmpty = false;
 
-//Declare functions
+// Declare functions
 void eraseAllData();
 void writeToFlashTest(SerialFlashFile pages[], char pagenames[10][10], int16_t batterySOCs[], int16_t batteryVoltages[], int16_t batteryCurrents[]);
 void writeAsRingBuffer();
 void initRingBuffer();
 void readWholeFlash();
-
 
 // Function to delete all the data from the flash
 void eraseAllData()
@@ -42,8 +41,9 @@ void eraseAllData()
 }
 
 // Function to write data from example array to the flash
-void writeToFlashTest(){
-// Sample pages
+void writeToFlashTest()
+{
+    // Sample pages
     char pagenames[10][10] = {"page0.bin",
                               "page1.bin",
                               "page2.bin",
@@ -114,113 +114,95 @@ void writeToFlashTest(){
 // but all pages are created in the beginning right away.
 void writeAsRingBuffer()
 {
-    uint32_t pagesize;
     char pagename[MAXNAMELENGTH];
-    String str;
+    char curPagename[MAXNAMELENGTH];
+    char nextPagename[MAXNAMELENGTH];
+    String strNextPage;
+    String strCurPage;
+    String filler = "XXXXX";
     char bufferWrite[MAXPAGESIZE];
     char bufferRead[MAXPAGESIZE];
     SerialFlashFile currentPage;
     SerialFlashFile dummy;
+    
     /*
-    if(directoryIndex == 499){
-        return;
-    }
-    */
-
     // Find the current index in the ring buffer
     while (SerialFlash.readdir(pagename, sizeof(pagename), pagesize))
     {
-        dummy = SerialFlash.open(pagename);
-        dummy.read(bufferRead, MAXPAGESIZE);
-        str = (String)bufferRead;
-        if (directoryIndex >= MAXPAGENUMBER)
-        {
-            directoryIndex = 0;
-        }
-        if (str == "XXXXX")
-        {
-            break;
-        }
         directoryIndex++;
     }
-    
-        // check if end of buffer is reached
-        if(directoryIndex == MAXPAGENUMBER-1){
-            directoryIndex = 0;
+    */
+    strNextPage = "page" + (String)(directoryIndex+1) + ".bin";
+    strCurPage = "page" + (String)(directoryIndex) + ".bin";
+    strNextPage.toCharArray(nextPagename, MAXNAMELENGTH);
+    strCurPage.toCharArray(curPagename, MAXNAMELENGTH);
+    // check if end of buffer is reached
+    if (directoryIndex == MAXPAGENUMBER - 1)
+    {
+        strNextPage = "page0.bin";
+        strCurPage = "page" + (String)(MAXPAGENUMBER-1) + ".bin";
+        bufferEmpty = false;
+    }
+    // check if buffer is empty
+    else if (!SerialFlash.exists(nextPagename) && !SerialFlash.exists(curPagename))
+    {
+        strNextPage = "page" + (String)(directoryIndex + 1) + ".bin";
+        strCurPage = "page" + (String)directoryIndex + ".bin";
+        bufferEmpty = true;
+        //directoryIndex++;
+    }
+    // Any normal case
+    else
+    {
+        strNextPage = "page" + (String)(directoryIndex + 1) + ".bin";
+        strCurPage = "page" + (String)(directoryIndex) + ".bin";
+        //directoryIndex++;
+        bufferEmpty = false;
+    }
 
-        // check if buffer is empty
-        }else if(!SerialFlash.exists("page0.bin") && !SerialFlash.exists("page65535.bin")){
-            directoryIndex = 0;
-
-        // check if it is the first run but buffer is not empty
-        }else if(firstRun){
-            directoryIndex = directoryIndex;
-
-        // Any normal case
-        }else{
-            directoryIndex++;
-        }
     // Delete page with following index if it exists. Delete first so there is always at least one free
     // index in the system
-    str = "page" + (String)(directoryIndex + 1) + ".bin";
-    str.toCharArray(pagename, MAXNAMELENGTH);
-    if (SerialFlash.exists(pagename))
+    
+    strNextPage.toCharArray(pagename, MAXNAMELENGTH);
+    if (!bufferEmpty)
     {
         currentPage = SerialFlash.open(pagename);
         currentPage.erase();
-        if(SerialFlash.exists(pagename)){
-            Serial.println("File still exists");
-        }else{
-            Serial.println("File deleted completely");
-            SerialFlash.createErasable(pagename, MAXPAGESIZE);
-            currentPage = SerialFlash.open(pagename);
-        }
-        currentPage.write("XXXXX", 6);
-        currentPage.close();
+        //SerialFlash.createErasable(pagename, MAXPAGESIZE);
+        //currentPage = SerialFlash.open(pagename);
+        //filler.toCharArray(bufferWrite, 6);
+        //currentPage.write(bufferWrite, 6);
+        //SerialFlash.eraseBlock(currentPage.getFlashAddress());
+        Serial.println((String)pagename + " erased! (next index)");
     }
+
     // Create and open a new page
-    str = "page" + (String)directoryIndex + ".bin";
-    str.toCharArray(pagename, MAXNAMELENGTH);
-    currentPage = SerialFlash.open(pagename);
-    currentPage.erase();
-    if(SerialFlash.exists(pagename)){
-        Serial.println("File still exists");
-    }else{
-        Serial.println("File deleted completely");
-        SerialFlash.createErasable(pagename, MAXPAGESIZE);
+    strCurPage.toCharArray(pagename, MAXNAMELENGTH);
+    /*if(!bufferEmpty){
         currentPage = SerialFlash.open(pagename);
-    }
+        currentPage.erase();
+        Serial.println((String)pagename + " erased! (current index)");
+    }*/
+
     // Write sample data
+    if(!SerialFlash.exists(pagename))
+        SerialFlash.createErasable(pagename, MAXPAGESIZE);
+    
+    currentPage = SerialFlash.open(pagename);
     itoa(sampleData, bufferWrite, 10);
     currentPage.write(bufferWrite, MAXPAGESIZE);
-    firstRun = false;
-}
+    Serial.println((String)pagename + " created and wrote " + bufferWrite);
 
-void initRingBuffer()
-{
-    eraseAllData();
-    char pagename[MAXNAMELENGTH];
-    String str;
-    SerialFlashFile currentPage;
+    //currentPage.read(bufferRead, MAXPAGESIZE);
+    //Serial.print("page " + (String)pagename + ": ");
+    //Serial.println(bufferRead);
 
-    // Initialize all pages with XXXXX to indicate they are empty
-    for (int i = 0; i < MAXPAGENUMBER; i++)
-    {
-        str = "page" + (String)i + ".bin";
-        str.toCharArray(pagename, MAXNAMELENGTH);
-        if (SerialFlash.createErasable(pagename, MAXPAGESIZE))
-        {
-            currentPage = SerialFlash.open(pagename);
-            currentPage.write("XXXXX", MAXPAGESIZE);
-            currentPage.close();
-            Serial.println("page: " + (String)pagename + " created successfully!");
-        }
-        else
-        {
-            Serial.println("page " + (String)pagename + " could not be created!");
-            return;
-        }
+    if (directoryIndex == MAXPAGENUMBER - 1){
+        directoryIndex = 0;
+    }else{
+        directoryIndex++;
     }
+    
 }
 
 // Function to read array data from the flash
@@ -268,34 +250,55 @@ void setup()
     {
         Serial.println("Successfully connected to SPI Flash chip");
     }
-    SerialFlash.opendir();
 
-    
+ 
 
-    //eraseAllData();
-    //initRingBuffer();
-    readWholeFlash();
-    /*
     // Call functions
+    
+    //eraseAllData();
+    readWholeFlash();
+   // Find current index
+    uint32_t pagesize;
+    char pagename[MAXNAMELENGTH];
+    char buffer[MAXPAGESIZE];
+    String str;
+    SerialFlash.opendir();
+    SerialFlashFile dummy;
+     
+    while (SerialFlash.readdir(pagename, sizeof(pagename), pagesize))
+    {
+        directoryIndex++;
+        dummy = SerialFlash.open(pagename);
+        dummy.read(buffer, 6);
+        str = (String)buffer;
+        if(str == "XXXXX"){
+            break;
+        }
+    }
+    Serial.println(directoryIndex);
+    //
+    /*
     writeToFlashTest(pages, pagenames, batterySOCs, batteryVoltages, batteryCurrents);
     delay(2000);
     Serial.println();
     readFromFlash();
     eraseAllData();
-    //readFromFlash();
     */
-    // Serial.end();
 }
 
 // Writes the buffer
 void loop()
 {
-    writeAsRingBuffer();
+    //writeAsRingBuffer();
     sampleData++;
+    //delay(500);
+    //readWholeFlash();
+    //delay(1000);
     /*
-    if(millis() > startTime + 5000){
-        readFromFlash();
+    if(millis() > startTime + 6000){
+        readWholeFlash();
         startTime = millis();
+        delay(1000);
     }
     */
 }
