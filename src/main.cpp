@@ -18,6 +18,7 @@ uint64_t sampleData = 0;
 uint64_t startTime = 0;
 uint16_t directoryIndex = 0;
 bool bufferEmpty = false;
+String fillerWord = "XXXXX";
 
 // Declare functions
 void eraseAllData();
@@ -119,7 +120,7 @@ void writeAsRingBuffer()
     char nextPagename[MAXNAMELENGTH];
     String strNextPage;
     String strCurPage;
-    String filler = "XXXXX";
+    char filler[MAXPAGESIZE];
     char bufferWrite[MAXPAGESIZE];
     char bufferRead[MAXPAGESIZE];
     SerialFlashFile currentPage;
@@ -163,35 +164,36 @@ void writeAsRingBuffer()
     // Delete page with following index if it exists. Delete first so there is always at least one free
     // index in the system
     
-    strNextPage.toCharArray(pagename, MAXNAMELENGTH);
+    fillerWord.toCharArray(filler, sizeof(filler));
+    strNextPage.toCharArray(nextPagename, MAXNAMELENGTH);
     if (!bufferEmpty)
     {
-        currentPage = SerialFlash.open(pagename);
+        currentPage = SerialFlash.open(nextPagename);
         currentPage.erase();
-        //SerialFlash.createErasable(pagename, MAXPAGESIZE);
-        //currentPage = SerialFlash.open(pagename);
-        //filler.toCharArray(bufferWrite, 6);
-        //currentPage.write(bufferWrite, 6);
+        SerialFlash.createErasable(nextPagename, MAXPAGESIZE);
+        currentPage = SerialFlash.open(nextPagename);
+        currentPage.write(filler, MAXPAGESIZE);
         //SerialFlash.eraseBlock(currentPage.getFlashAddress());
-        Serial.println((String)pagename + " erased! (next index)");
+        Serial.println((String)nextPagename + " erased! (next index)");
     }
 
     // Create and open a new page
-    strCurPage.toCharArray(pagename, MAXNAMELENGTH);
+    strCurPage.toCharArray(curPagename, MAXNAMELENGTH);
     /*if(!bufferEmpty){
         currentPage = SerialFlash.open(pagename);
         currentPage.erase();
         Serial.println((String)pagename + " erased! (current index)");
     }*/
 
-    // Write sample data
-    if(!SerialFlash.exists(pagename))
-        SerialFlash.createErasable(pagename, MAXPAGESIZE);
-    
-    currentPage = SerialFlash.open(pagename);
     itoa(sampleData, bufferWrite, 10);
+    if(SerialFlash.exists(curPagename)){
+        currentPage = SerialFlash.open(curPagename);
+        currentPage.erase();
+    }
+    SerialFlash.createErasable(curPagename, MAXPAGESIZE);
+    currentPage = SerialFlash.open(curPagename);
     currentPage.write(bufferWrite, MAXPAGESIZE);
-    Serial.println((String)pagename + " created and wrote " + bufferWrite);
+    Serial.println((String)curPagename + " created and wrote " + bufferWrite);
 
     //currentPage.read(bufferRead, MAXPAGESIZE);
     //Serial.print("page " + (String)pagename + ": ");
@@ -267,13 +269,13 @@ void setup()
      
     while (SerialFlash.readdir(pagename, sizeof(pagename), pagesize))
     {
-        directoryIndex++;
         dummy = SerialFlash.open(pagename);
         dummy.read(buffer, 6);
         str = (String)buffer;
-        if(str == "XXXXX"){
+        if(str == fillerWord){
             break;
         }
+        directoryIndex++;
     }
     Serial.println(directoryIndex);
     //
