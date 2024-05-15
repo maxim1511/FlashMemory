@@ -5,21 +5,21 @@
 #include <SerialFlash.h>
 
 // Currently using VSPI. Only CS is needed here, rest is just for orientation
-#define CS 4
+#define CS 4                     // Needs to be adjusted according to the avalaible GPIO of the ESP32
 #define CLK 18
 #define MISO 19
 #define MOSI 23
 
-#define MAXPAGESIZE 256
-#define MAXPAGENUMBER 30
-#define MAXNAMELENGTH 14
+#define MAXPAGESIZE 256       // The maximum size page size in the memory
+#define MAXPAGENUMBER 30      // For test purpose 
+#define MAXNAMELENGTH 14      // Maximum name lenght 
 
 // Global variables
-uint64_t sampleData = 0;
-uint64_t startTime = 0;
-uint16_t directoryIndex = 0;
+uint64_t sampleData = 0;             // Use as input for testing puspose 
+uint64_t startTime = 0;             // Use as statr time for testing puspose
+uint16_t directoryIndex = 0;        // Current index in the buffet
 bool bufferEmpty = false;
-String fillerWord = "XXXXX";
+String fillerWord = "XXXXX";        // Current position in the buffer
 
 // Declare functions
 void eraseAllData();
@@ -214,7 +214,7 @@ void eraseAllData()
 void setup()
 {
     startTime = millis();
-    Serial.begin(9600);
+    Serial.begin(115200);
     delay(3000);
     Serial.println();
 
@@ -270,12 +270,14 @@ void setup()
 // Loop function, is called after setup is completed
 void loop()
 {
-    // writeAsRingBuffer();
-    sampleData++;
-    // delay(500);
-    // readWholeFlash();
+    //
+    writeAsRingBuffer();        // Write a ring buffer in loop of 30 pages
+    sampleData++;              // increment the Data after each written pages
+     delay(500);
+    // readWholeFlash();       // read the whole flash memory
     // delay(1000);
     /*
+    // Read the whole flash at given time step
     if(millis() > startTime + 6000){
         readWholeFlash();
         startTime = millis();
