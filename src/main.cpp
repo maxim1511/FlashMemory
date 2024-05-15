@@ -14,6 +14,7 @@
 #define MAXPAGENUMBER 30
 #define MAXNAMELENGTH 14
 
+// Global variables
 uint64_t sampleData = 0;
 uint64_t startTime = 0;
 uint16_t directoryIndex = 0;
@@ -26,20 +27,6 @@ void writeToFlashTest(SerialFlashFile pages[], char pagenames[10][10], int16_t b
 void writeAsRingBuffer();
 void initRingBuffer();
 void readWholeFlash();
-
-// Function to delete all the data from the flash
-void eraseAllData()
-{
-    SerialFlash.eraseAll();
-
-    // Wait till it is all erased
-    while (!SerialFlash.ready())
-    {
-        Serial.println("Erasing Chip...");
-        delay(1000);
-    }
-    Serial.println("Flash erased succesfully!");
-}
 
 // Function to write data from example array to the flash
 void writeToFlashTest()
@@ -104,36 +91,25 @@ void writeToFlashTest()
     }
 }
 
-// Function to use the flash as a ringbuffer. Pages get written in chronological order till the flash is
-// filled, then it will start at the beginning of the flash again by overwriting the oldest page
-// pages will be named with "page" + index of the page (0-65535) + ".bin", max pagename size is thus 14 bytes
-// When a page is written and there exists a page with the following index, that following page is erased,
-// so there is always an empty index in the buffer which can in case of a restart be used to find the current
-// position in the ring buffer.
-
-// New idea: initialize the buffer by writing the first 5 bytes as XXXXX to indicate that a page is empty,
-// but all pages are created in the beginning right away.
+// Function used to write to the flash as a ring buffer.
+// Pages are named with "page" + index + ".bin"
+// When the buffer is filled it will start writing at 0 again (first in first out)
+// First the following page will be erased and written with a filler word, then the current page is erased
+// and written with data. The filler word is used to find the current place in the buffer if the buffer
+// is rebooted.
 void writeAsRingBuffer()
 {
-    char pagename[MAXNAMELENGTH];
+    // Declare variables
     char curPagename[MAXNAMELENGTH];
     char nextPagename[MAXNAMELENGTH];
     String strNextPage;
     String strCurPage;
     char filler[MAXPAGESIZE];
     char bufferWrite[MAXPAGESIZE];
-    char bufferRead[MAXPAGESIZE];
     SerialFlashFile currentPage;
     SerialFlashFile dummy;
-    
-    /*
-    // Find the current index in the ring buffer
-    while (SerialFlash.readdir(pagename, sizeof(pagename), pagesize))
-    {
-        directoryIndex++;
-    }
-    */
-    strNextPage = "page" + (String)(directoryIndex+1) + ".bin";
+
+    strNextPage = "page" + (String)(directoryIndex + 1) + ".bin";
     strCurPage = "page" + (String)(directoryIndex) + ".bin";
     strNextPage.toCharArray(nextPagename, MAXNAMELENGTH);
     strCurPage.toCharArray(curPagename, MAXNAMELENGTH);
@@ -141,7 +117,7 @@ void writeAsRingBuffer()
     if (directoryIndex == MAXPAGENUMBER - 1)
     {
         strNextPage = "page0.bin";
-        strCurPage = "page" + (String)(MAXPAGENUMBER-1) + ".bin";
+        strCurPage = "page" + (String)(MAXPAGENUMBER - 1) + ".bin";
         bufferEmpty = false;
     }
     // check if buffer is empty
@@ -150,20 +126,17 @@ void writeAsRingBuffer()
         strNextPage = "page" + (String)(directoryIndex + 1) + ".bin";
         strCurPage = "page" + (String)directoryIndex + ".bin";
         bufferEmpty = true;
-        //directoryIndex++;
     }
     // Any normal case
     else
     {
         strNextPage = "page" + (String)(directoryIndex + 1) + ".bin";
         strCurPage = "page" + (String)(directoryIndex) + ".bin";
-        //directoryIndex++;
         bufferEmpty = false;
     }
 
-    // Delete page with following index if it exists. Delete first so there is always at least one free
-    // index in the system
-    
+    // Delete page with following index if it exists and write filler word.
+    // Delete first so there is always at least one free index in the system
     fillerWord.toCharArray(filler, sizeof(filler));
     strNextPage.toCharArray(nextPagename, MAXNAMELENGTH);
     if (!bufferEmpty)
@@ -173,20 +146,14 @@ void writeAsRingBuffer()
         SerialFlash.createErasable(nextPagename, MAXPAGESIZE);
         currentPage = SerialFlash.open(nextPagename);
         currentPage.write(filler, MAXPAGESIZE);
-        //SerialFlash.eraseBlock(currentPage.getFlashAddress());
         Serial.println((String)nextPagename + " erased! (next index)");
     }
 
-    // Create and open a new page
+    // Create, open and write data to a new page
     strCurPage.toCharArray(curPagename, MAXNAMELENGTH);
-    /*if(!bufferEmpty){
-        currentPage = SerialFlash.open(pagename);
-        currentPage.erase();
-        Serial.println((String)pagename + " erased! (current index)");
-    }*/
-
     itoa(sampleData, bufferWrite, 10);
-    if(SerialFlash.exists(curPagename)){
+    if (SerialFlash.exists(curPagename))
+    {
         currentPage = SerialFlash.open(curPagename);
         currentPage.erase();
     }
@@ -195,21 +162,21 @@ void writeAsRingBuffer()
     currentPage.write(bufferWrite, MAXPAGESIZE);
     Serial.println((String)curPagename + " created and wrote " + bufferWrite);
 
-    //currentPage.read(bufferRead, MAXPAGESIZE);
-    //Serial.print("page " + (String)pagename + ": ");
-    //Serial.println(bufferRead);
-
-    if (directoryIndex == MAXPAGENUMBER - 1){
+    // Increment the index or reset to zero if end of buffer is reached.
+    if (directoryIndex == MAXPAGENUMBER - 1)
+    {
         directoryIndex = 0;
-    }else{
+    }
+    else
+    {
         directoryIndex++;
     }
-    
 }
 
 // Function to read array data from the flash
 void readWholeFlash()
 {
+    // Declare variables
     uint32_t pagesize;
     char pagename[64];
     char buffer[MAXPAGESIZE];
@@ -229,15 +196,27 @@ void readWholeFlash()
     Serial.println("Number of pages read: " + (String)counter);
 }
 
-// Main function
+// Function to delete all the data from the flash
+void eraseAllData()
+{
+    SerialFlash.eraseAll();
+
+    // Wait till it is all erased
+    while (!SerialFlash.ready())
+    {
+        Serial.println("Erasing Chip...");
+        delay(1000);
+    }
+    Serial.println("Flash erased succesfully!");
+}
+
+// Setup function, entry point of the program
 void setup()
 {
     startTime = millis();
     Serial.begin(9600);
     delay(3000);
     Serial.println();
-    // Set up SPI
-    // SPI.begin(CLK, MISO, MOSI, CS);
 
     // Start the SPI communication
     if (!SerialFlash.begin(CS))
@@ -253,32 +232,32 @@ void setup()
         Serial.println("Successfully connected to SPI Flash chip");
     }
 
- 
-
     // Call functions
-    
-    //eraseAllData();
+    // eraseAllData();
     readWholeFlash();
-   // Find current index
+
+    // Find current index in the buffer
     uint32_t pagesize;
     char pagename[MAXNAMELENGTH];
     char buffer[MAXPAGESIZE];
     String str;
     SerialFlash.opendir();
     SerialFlashFile dummy;
-     
+
     while (SerialFlash.readdir(pagename, sizeof(pagename), pagesize))
     {
         dummy = SerialFlash.open(pagename);
         dummy.read(buffer, 6);
         str = (String)buffer;
-        if(str == fillerWord){
+        if (str == fillerWord)
+        {
             break;
         }
         directoryIndex++;
     }
     Serial.println(directoryIndex);
-    //
+
+    // For first test
     /*
     writeToFlashTest(pages, pagenames, batterySOCs, batteryVoltages, batteryCurrents);
     delay(2000);
@@ -288,14 +267,14 @@ void setup()
     */
 }
 
-// Writes the buffer
+// Loop function, is called after setup is completed
 void loop()
 {
-    //writeAsRingBuffer();
+    // writeAsRingBuffer();
     sampleData++;
-    //delay(500);
-    //readWholeFlash();
-    //delay(1000);
+    // delay(500);
+    // readWholeFlash();
+    // delay(1000);
     /*
     if(millis() > startTime + 6000){
         readWholeFlash();
